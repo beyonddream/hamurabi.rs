@@ -5,7 +5,7 @@ use std::process::exit;
 use text_io::try_scan;
 
 #[derive(Clone, Copy)]
-enum CityEvent {
+enum GameEvent {
     Plague,
     BuyAcres,
     SellAcres,
@@ -56,13 +56,13 @@ fn get_new_city() -> City {
     }
 }
 
-fn check_plague(acres_buy_or_sell: u16, city: &mut City) -> CityEvent {
+fn check_plague(acres_buy_or_sell: u16, city: &mut City) -> GameEvent {
     // original game logic - assume there is a plague if no acres are bought or sold.
     if acres_buy_or_sell <= 0 {
         city.population = city.population / 2;
-        return CityEvent::Plague;
+        return GameEvent::Plague;
     }
-    CityEvent::None
+    GameEvent::None
 }
 
 fn update_report_summary(city: &mut City, acres_buy_or_sell: &u16) {
@@ -74,7 +74,7 @@ fn update_report_summary(city: &mut City, acres_buy_or_sell: &u16) {
     city.year += 1;
     city.population += city.people_arrived;
 
-    if let CityEvent::Plague = check_plague(*acres_buy_or_sell, city) {
+    if let GameEvent::Plague = check_plague(*acres_buy_or_sell, city) {
         println!("A horrible plague struck! Half the people died.");
     }
 
@@ -172,7 +172,7 @@ fn harvest_bounty(
     acres_buy_or_sell: &mut u16,
     population_starved_per_yr: &mut u16,
     people_died_total: &mut u16,
-) -> CityEvent {
+) -> GameEvent {
     let new_bushels;
 
     let random_event_value = game_get_random_event_value(5.0, 1.0);
@@ -198,7 +198,7 @@ fn harvest_bounty(
 
     if city.population < random_event_value {
         city.people_starved = 0;
-        return CityEvent::None;
+        return GameEvent::None;
     }
 
     city.people_starved = city.population - random_event_value;
@@ -206,7 +206,7 @@ fn harvest_bounty(
     if city.people_starved > (0.45 * city.population as f64) as u16 {
         println!("You starved {} people in one year", city.people_starved);
         game_print_result_worse();
-        return CityEvent::Exit;
+        return GameEvent::Exit;
     }
 
     *population_starved_per_yr = (((city.year - 1) * (*population_starved_per_yr))
@@ -215,10 +215,10 @@ fn harvest_bounty(
     city.population = random_event_value;
     *people_died_total += city.people_starved;
 
-    CityEvent::None
+    GameEvent::None
 }
 
-fn plant_seeds(city: &mut City) -> CityEvent {
+fn plant_seeds(city: &mut City) -> GameEvent {
     let acres_to_plant: &mut u16 = &mut city.people_starved;
 
     loop {
@@ -227,7 +227,7 @@ fn plant_seeds(city: &mut City) -> CityEvent {
 
         if *acres_to_plant == 0 {
             city.acres_planted_with_seed = *acres_to_plant;
-            return CityEvent::HarvestBounty;
+            return GameEvent::HarvestBounty;
         }
 
         if *acres_to_plant > city.acres_owned {
@@ -250,10 +250,10 @@ fn plant_seeds(city: &mut City) -> CityEvent {
     city.acres_planted_with_seed = *acres_to_plant;
     city.bushels_preserved -= *acres_to_plant / 2;
 
-    CityEvent::HarvestBounty
+    GameEvent::HarvestBounty
 }
 
-fn feed_people(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
+fn feed_people(city: &mut City, acres_buy_or_sell: &mut u16) -> GameEvent {
     let bushels_to_feed_people = acres_buy_or_sell;
     let bushels_preserved = city.bushels_preserved;
 
@@ -270,10 +270,10 @@ fn feed_people(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
 
     city.bushels_preserved -= *bushels_to_feed_people;
 
-    CityEvent::PlantSeeds
+    GameEvent::PlantSeeds
 }
 
-fn sell_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
+fn sell_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> GameEvent {
     let bushels_per_acre: u16 = city.bushels_per_acre;
 
     loop {
@@ -289,10 +289,10 @@ fn sell_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
     city.acres_owned -= *acres_buy_or_sell;
     city.bushels_preserved += bushels_per_acre * (*acres_buy_or_sell);
 
-    CityEvent::FeedPeople
+    GameEvent::FeedPeople
 }
 
-fn buy_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
+fn buy_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> GameEvent {
     let bushels_preserved = city.bushels_preserved;
     let bushels_per_acre = city.bushels_per_acre;
 
@@ -309,10 +309,10 @@ fn buy_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
     if *acres_buy_or_sell != 0 {
         city.acres_owned += *acres_buy_or_sell;
         city.bushels_preserved -= bushels_per_acre * (*acres_buy_or_sell);
-        return CityEvent::FeedPeople;
+        return GameEvent::FeedPeople;
     }
 
-    return CityEvent::SellAcres;
+    return GameEvent::SellAcres;
 }
 
 fn game_print_result_worse() {
@@ -372,19 +372,19 @@ fn game_start() {
                 city.bushels_per_acre
             );
 
-            let mut game_state = CityEvent::BuyAcres;
+            let mut game_state = GameEvent::BuyAcres;
             loop {
                 match game_state {
-                    CityEvent::BuyAcres => {
+                    GameEvent::BuyAcres => {
                         game_state = buy_acres(&mut city, &mut acres_buy_or_sell)
                     }
-                    CityEvent::FeedPeople => {
+                    GameEvent::FeedPeople => {
                         game_state = feed_people(&mut city, &mut acres_buy_or_sell)
                     }
-                    CityEvent::SellAcres => {
+                    GameEvent::SellAcres => {
                         game_state = sell_acres(&mut city, &mut acres_buy_or_sell)
                     }
-                    CityEvent::HarvestBounty => {
+                    GameEvent::HarvestBounty => {
                         game_state = harvest_bounty(
                             &mut city,
                             &mut acres_buy_or_sell,
@@ -392,8 +392,8 @@ fn game_start() {
                             &mut people_died_total,
                         )
                     }
-                    CityEvent::PlantSeeds => game_state = plant_seeds(&mut city),
-                    CityEvent::Exit => exit(0), /* Game end */
+                    GameEvent::PlantSeeds => game_state = plant_seeds(&mut city),
+                    GameEvent::Exit => exit(0), /* Game end */
                     _ => break,                 /* current year complete */
                 }
             }
