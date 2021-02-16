@@ -58,8 +58,8 @@ fn get_new_city() -> City {
 
 fn check_plague(acres_buy_or_sell: u16, city: &mut City) -> GameEvent {
     // original game logic - assume there is a plague if no acres are bought or sold.
-    if acres_buy_or_sell <= 0 {
-        city.population = city.population / 2;
+    if acres_buy_or_sell == 0 {
+        city.population /= 2;
         return GameEvent::Plague;
     }
     GameEvent::None
@@ -312,7 +312,7 @@ fn buy_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> GameEvent {
         return GameEvent::FeedPeople;
     }
 
-    return GameEvent::SellAcres;
+    GameEvent::SellAcres
 }
 
 fn game_print_result_worse() {
