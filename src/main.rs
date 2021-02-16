@@ -1,4 +1,6 @@
 use rand::{rngs::ThreadRng, Rng};
+use std::io::stdout;
+use std::io::Write;
 use std::process::exit;
 use text_io::try_scan;
 
@@ -65,7 +67,7 @@ fn check_plague(acres_buy_or_sell: u16, city: &mut City) -> CityEvent {
 
 fn update_report_summary(city: &mut City, acres_buy_or_sell: &u16) {
     println!(
-        "Hamurabu: I beg to report to you, In year {}, {} people starved, {} came to the city.",
+        "\nHamurabu: I beg to report to you, In year {}, {} people starved, {} came to the city.",
         city.year, city.people_starved, city.people_arrived
     );
 
@@ -116,6 +118,7 @@ fn game_illegal_bushels_input(bushels_total: u16) {
         "Hamurabi: Think again. You have only {} bushels of grain. Now then, ",
         bushels_total
     );
+    stdout().flush().unwrap();
 }
 
 fn game_illegal_acres_input(acres_total: u16) {
@@ -123,6 +126,7 @@ fn game_illegal_acres_input(acres_total: u16) {
         "Hamurabi: Think again. You own only {} acres. Now then, ",
         acres_total
     );
+    stdout().flush().unwrap();
 }
 
 fn game_get_user_input_validated() -> Result<i32, text_io::Error> {
@@ -134,6 +138,7 @@ fn game_get_user_input_validated() -> Result<i32, text_io::Error> {
 
 fn game_get_user_input(user_prompt: &'static str) -> i32 {
     print!("{} (input a number >= 0)", user_prompt);
+    stdout().flush().unwrap();
 
     match game_get_user_input_validated() {
         Ok(user_input) => user_input,
@@ -144,20 +149,20 @@ fn game_get_user_input(user_prompt: &'static str) -> i32 {
     }
 }
 
-fn game_get_random_event_value(multiplier: f64, padding: i64) -> i64 {
+fn game_get_random_event_value(multiplier: f64, padding: f64) -> f64 {
     let mut rng = rand::thread_rng();
     let random_event_value = rng.gen::<f64>();
 
-    (random_event_value * multiplier) as i64 + padding
+    (random_event_value * multiplier) + padding
 }
 
 fn check_rat_menace(city: &mut City) {
     let random_event_value;
 
     city.bushels_destroyed = 0;
-    random_event_value = game_get_random_event_value(5.0, 1);
+    random_event_value = game_get_random_event_value(5.0, 1.0);
 
-    if (random_event_value as f64 / 2.0) as i64 == (random_event_value / 2) {
+    if (random_event_value / 2.0) as i64 == (random_event_value as i64 / 2) {
         city.bushels_destroyed = city.bushels_preserved / random_event_value as u16;
     }
 }
@@ -170,21 +175,26 @@ fn harvest_bounty(
 ) -> CityEvent {
     let new_bushels;
 
-    let random_event_value = game_get_random_event_value(5.0, 1);
+    let random_event_value = game_get_random_event_value(5.0, 1.0);
     city.bushels_per_acre = random_event_value as u16;
     new_bushels = city.acres_planted_with_seed * city.bushels_per_acre;
 
     check_rat_menace(city);
 
-    city.bushels_preserved += new_bushels - city.bushels_destroyed;
-    let random_event_value = game_get_random_event_value(5.0, 1);
+    city.bushels_preserved = if new_bushels > 0 {
+        city.bushels_preserved - city.bushels_destroyed + new_bushels
+    } else {
+        city.bushels_preserved - city.bushels_destroyed
+    };
+
+    let random_event_value = game_get_random_event_value(5.0, 1.0);
     city.people_arrived = (random_event_value
-        * ((20 * city.acres_owned) + city.bushels_preserved) as i64
-        / city.population as i64
-        / 101 as i64) as u16;
+        * ((20 * city.acres_owned) + city.bushels_preserved) as f64
+        / city.population as f64
+        / 101.0) as u16;
 
     let random_event_value = *acres_buy_or_sell / 20;
-    *acres_buy_or_sell = 10 * ((2 * game_get_random_event_value(1.0, 0)) as f64 - 0.3) as u16;
+    *acres_buy_or_sell = 10 * (2.0 * game_get_random_event_value(1.0, 0.0) - 0.3) as u16;
 
     if city.population < random_event_value {
         city.people_starved = 0;
@@ -231,6 +241,7 @@ fn plant_seeds(city: &mut City) -> CityEvent {
                 "But you have only {} people to tend the fields. Now then, ",
                 city.population
             );
+            stdout().flush().unwrap();
             continue;
         }
         break;
@@ -334,7 +345,7 @@ fn game_start() {
     let mut rng = rand::thread_rng();
 
     println!(
-        "Try your hand at governing ancient sumeria, successfully for a 10-yr term of office.\n"
+        "\nTry your hand at governing ancient sumeria, successfully for a 10-yr term of office."
     );
 
     let mut city = get_new_city();
