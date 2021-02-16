@@ -1,17 +1,17 @@
-use rand::Rng;
-use text_io::scan;
+use rand::{rngs::ThreadRng, Rng};
+use std::process::exit;
+use text_io::try_scan;
 
 #[derive(Clone, Copy)]
 enum CityEvent {
-    None,
     Plague,
-    RatMenace,
     BuyAcres,
     SellAcres,
     FeedPeople,
     PlantSeeds,
     HarvestBounty,
-    Unknown,
+    None,
+    Exit,
 }
 
 #[derive(Clone, Copy)]
@@ -125,12 +125,23 @@ fn game_illegal_acres_input(acres_total: u16) {
     );
 }
 
-fn game_get_user_input(user_prompt: &'static str) -> i32 {
+fn game_get_user_input_validated() -> Result<i32, text_io::Error> {
     let user_input: i32;
-    print!("{} (input a number >= 0)", user_prompt); // TODO: need error handling
-    scan!("{}", user_input);
+    try_scan!("{}", user_input);
 
-    return user_input;
+    Ok(user_input)
+}
+
+fn game_get_user_input(user_prompt: &'static str) -> i32 {
+    print!("{} (input a number >= 0)", user_prompt);
+
+    match game_get_user_input_validated() {
+        Ok(user_input) => user_input,
+        Err(_) => {
+            game_illegal_input();
+            exit(1); /* Game end */
+        }
+    }
 }
 
 fn game_get_random_event_value(multiplier: f64, padding: i64) -> i64 {
@@ -156,7 +167,7 @@ fn harvest_bounty(
     acres_buy_or_sell: &mut u16,
     population_starved_per_yr: &mut u16,
     people_died_total: &mut u16,
-) {
+) -> CityEvent {
     let new_bushels;
 
     let random_event_value = game_get_random_event_value(5.0, 1);
@@ -177,15 +188,15 @@ fn harvest_bounty(
 
     if city.population < random_event_value {
         city.people_starved = 0;
+        return CityEvent::None;
     }
 
     city.people_starved = city.population - random_event_value;
 
     if city.people_starved > (0.45 * city.population as f64) as u16 {
         println!("You starved {} people in one year", city.people_starved);
-        println!("Due to this extreme mismanagement you have not only been impeached \
-                                                and thrown out of office but you have also been declared 'NATIONAL FINK'!!");
-        //exit
+        game_print_result_worse();
+        return CityEvent::Exit;
     }
 
     *population_starved_per_yr = (((city.year - 1) * (*population_starved_per_yr))
@@ -193,6 +204,8 @@ fn harvest_bounty(
         / city.year;
     city.population = random_event_value;
     *people_died_total += city.people_starved;
+
+    CityEvent::None
 }
 
 fn plant_seeds(city: &mut City) -> CityEvent {
@@ -203,6 +216,7 @@ fn plant_seeds(city: &mut City) -> CityEvent {
             game_get_user_input("How many acres do you wish to plant with seed?") as u16;
 
         if *acres_to_plant == 0 {
+            city.acres_planted_with_seed = *acres_to_plant;
             return CityEvent::HarvestBounty;
         }
 
@@ -290,10 +304,33 @@ fn buy_acres(city: &mut City, acres_buy_or_sell: &mut u16) -> CityEvent {
     return CityEvent::SellAcres;
 }
 
+fn game_print_result_worse() {
+    println!("Due to this extreme mismanagement you have not only been impeached \
+                                                and thrown out of office but you have also been declared 'NATIONAL FINK'!!");
+}
+
+fn game_print_result_bad() {
+    println!("Your heavy handed performance smacks of Nero and Ivan IV. The people \
+                                                (remaining) find you an unpleasant ruler, and, frankly, hate your guts!");
+}
+
+fn game_print_result_fair(city: &City, rng: &mut ThreadRng) {
+    let rebels = (city.population * rng.gen::<u16>()) as f64 * 0.8;
+    println!("Your performance could have been somewhat better, but really wasn't too bad at all. \
+                            {} people would dearly like to see you assasinated but we all have our trivial problems.", rebels);
+}
+
+fn game_print_result_good() {
+    println!(
+        "A fantastic performance!!! Charlemange, Disraeli, and Jefferson combined \
+                                                could not have done better!"
+    );
+}
+
 fn game_start() {
     let mut acres_buy_or_sell: u16;
-    let population_starved_per_yr: u16;
-    let people_died_total: u16;
+    let mut population_starved_per_yr: u16;
+    let mut people_died_total: u16;
     let mut rng = rand::thread_rng();
 
     println!(
@@ -310,20 +347,12 @@ fn game_start() {
 
         if city.year > 10 {
             match game_result(&city, population_starved_per_yr, people_died_total) {
-                PlayerScore::Worse => println!("Due to this extreme mismanagement you have not only been impeached \
-                                                and thrown out of office but you have also been declared 'NATIONAL FINK'!!"),
-                PlayerScore::Bad   => println!("Your heavy handed performance smacks of Nero and Ivan IV. The people \
-                                                (remaining) find you an unpleasant ruler, and, frankly, hate your guts!"),
-                PlayerScore::Fair  => {
-                    let rebels = (city.population * rng.gen::<u16>()) as f64 * 0.8;
-                    println!("Your performance could have been somewhat better, but really wasn't too bad at all. \
-                            {} people would dearly like to see you assasinated but we all have our trivial problems.", rebels)
-                },
-                PlayerScore::Good  => println!("A fantastic performance!!! Charlemange, Disraeli, and Jefferson combined \
-                                                could not have done better!"),
+                PlayerScore::Worse => game_print_result_worse(),
+                PlayerScore::Bad => game_print_result_bad(),
+                PlayerScore::Fair => game_print_result_fair(&city, &mut rng),
+                PlayerScore::Good => game_print_result_good(),
             }
-            // game end
-            break;
+            exit(0); /* Game end */
         } else {
             let random_event_value = rng.gen_range(0..10);
             city.bushels_per_acre = random_event_value + 17;
@@ -332,7 +361,31 @@ fn game_start() {
                 city.bushels_per_acre
             );
 
-            buy_acres(&mut city, &mut acres_buy_or_sell);
+            let mut game_state = CityEvent::BuyAcres;
+            loop {
+                match game_state {
+                    CityEvent::BuyAcres => {
+                        game_state = buy_acres(&mut city, &mut acres_buy_or_sell)
+                    }
+                    CityEvent::FeedPeople => {
+                        game_state = feed_people(&mut city, &mut acres_buy_or_sell)
+                    }
+                    CityEvent::SellAcres => {
+                        game_state = sell_acres(&mut city, &mut acres_buy_or_sell)
+                    }
+                    CityEvent::HarvestBounty => {
+                        game_state = harvest_bounty(
+                            &mut city,
+                            &mut acres_buy_or_sell,
+                            &mut population_starved_per_yr,
+                            &mut people_died_total,
+                        )
+                    }
+                    CityEvent::PlantSeeds => game_state = plant_seeds(&mut city),
+                    CityEvent::Exit => exit(0), /* Game end */
+                    _ => break,                 /* current year complete */
+                }
+            }
         }
     }
 }
