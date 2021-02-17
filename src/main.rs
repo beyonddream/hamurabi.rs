@@ -65,7 +65,9 @@ fn check_plague(acres_buy_or_sell: u16, city: &mut City) -> GameEvent {
     GameEvent::None
 }
 
-fn update_report_summary(city: &mut City, acres_buy_or_sell: &u16) {
+fn update_report_summary(city: &mut City, acres_buy_or_sell: &u16, rng: &mut ThreadRng) {
+    let random_event_value;
+
     println!(
         "\nHamurabu: I beg to report to you, In year {}, {} people starved, {} came to the city.",
         city.year, city.people_starved, city.people_arrived
@@ -86,6 +88,13 @@ fn update_report_summary(city: &mut City, acres_buy_or_sell: &u16) {
     );
     println!("Rats ate {} bushels.", city.bushels_destroyed);
     println!("You now have {} bushels in store.", city.bushels_preserved);
+
+    random_event_value = rng.gen_range(0..10);
+    city.bushels_per_acre = random_event_value + 17;
+    println!(
+        "Land is trading at {} bushels per acre.",
+        city.bushels_per_acre
+    );
 }
 
 fn game_result(city: &City, population_starved_per_yr: u16, people_died_total: u16) -> PlayerScore {
@@ -354,7 +363,7 @@ fn game_start() {
     population_starved_per_yr = 0;
 
     loop {
-        update_report_summary(&mut city, &acres_buy_or_sell);
+        update_report_summary(&mut city, &acres_buy_or_sell, &mut rng);
 
         if city.year > 10 {
             match game_result(&city, population_starved_per_yr, people_died_total) {
@@ -365,14 +374,8 @@ fn game_start() {
             }
             exit(0); /* Game end */
         } else {
-            let random_event_value = rng.gen_range(0..10);
-            city.bushels_per_acre = random_event_value + 17;
-            println!(
-                "Land is trading at {} bushels per acre.",
-                city.bushels_per_acre
-            );
-
             let mut game_state = GameEvent::BuyAcres;
+
             loop {
                 match game_state {
                     GameEvent::BuyAcres => {
